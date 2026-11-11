@@ -1,4 +1,5 @@
 require "test_helper"
+require "fugit"
 
 class BootstrapConfigTest < ActiveSupport::TestCase
   test "ai workflow skeleton keeps required docs and trackable empty directories" do
@@ -85,6 +86,9 @@ class BootstrapConfigTest < ActiveSupport::TestCase
       assert_equal "PurgeStaleListingsJob", schedules.dig("purge_stale_listings", "class")
       assert_equal "BackfillInfoCasasCoordinatesJob", schedules.dig("backfill_info_casas_coordinates", "class")
       assert_equal [{ "limit" => 20 }], schedules.dig("backfill_info_casas_coordinates", "args")
+      assert_equal "BackfillRemaxParkingJob", schedules.dig("backfill_remax_parking", "class")
+      assert_equal [{ "limit" => 50 }], schedules.dig("backfill_remax_parking", "args")
+      assert Fugit.parse(schedules.dig("backfill_remax_parking", "schedule"))
     end
   end
 

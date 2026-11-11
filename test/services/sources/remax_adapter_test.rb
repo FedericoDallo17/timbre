@@ -126,6 +126,71 @@ class Sources::RemaxAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "detail reads the reported property's explicit parkingSpaces field and counts the request" do
+    requests = 0
+    adapter = Sources::RemaxAdapter.new(on_request: -> { requests += 1 }, detail_throttle_seconds: 0)
+    slug = "venta-apartamento-2-dormitorios-gge-la-blanqueada"
+    response_body = JSON.generate(data: { slug: slug, parkingSpaces: 1 })
+    stub_net_http_start(response_body: response_body, request_assertion: ->(_host, _port, options, request) {
+      assert_equal "/remaxweb-uy/api/listings/findBySlug/#{slug}", request.path
+      assert_equal 15, options[:read_timeout]
+    }) do
+      assert_equal 1, adapter.parking_spaces_for_url("https://www.remax.com.uy/listings/#{slug}")
+    end
+    assert_equal 1, requests
+  end
+
+  test "detail distinguishes explicit zero from absent invalid or mismatched parking data" do
+    adapter = Sources::RemaxAdapter.new(detail_throttle_seconds: 0)
+    url = "https://www.remax.com.uy/listings/example"
+    [0, "2", nil, "", -1, "garage", 1.5, true].each do |value|
+      stub_net_http_start(response_body: JSON.generate(data: { slug: "example", parkingSpaces: value })) do
+        expected = value == 0 ? 0 : value == "2" ? 2 : nil
+        actual = adapter.parking_spaces_for_url(url)
+        expected.nil? ? assert_nil(actual) : assert_equal(expected, actual)
+      end
+    end
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "other", parkingSpaces: 1 })) do
+      assert_nil adapter.parking_spaces_for_url(url)
+    end
+    stub_net_http_start(response_body: "invalid JSON") do
+      assert_nil adapter.parking_spaces_for_url(url)
+    end
+  end
+
+  test "detail rejects unexpected destinations and does not infer a count from the title" do
+    adapter = Sources::RemaxAdapter.new(detail_throttle_seconds: 0)
+    ["https://example.test/listings/foo", "http://www.remax.com.uy/listings/foo", "https://www.remax.com.uy/other"].each do |url|
+      assert_nil adapter.parking_spaces_for_url(url)
+    end
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "example", title: "garage para 2 autos" })) do
+      assert_nil adapter.parking_spaces_for_url("https://www.remax.com.uy/listings/example")
+    end
+  end
+
+  test "detail ignores HTTP errors and tolerates network timeouts" do
+    adapter = Sources::RemaxAdapter.new(detail_throttle_seconds: 0)
+    url = "https://www.remax.com.uy/listings/example"
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "example", parkingSpaces: 1 }), response_code: "503") do
+      assert_nil adapter.parking_spaces_for_url(url)
+    end
+    stub_net_http_start(response_body: "", request_assertion: ->(*) { raise Net::ReadTimeout }) do
+      assert_nil adapter.parking_spaces_for_url(url)
+    end
+  end
+
+  test "index omits unknown parking so reingestion preserves a detail-enriched count" do
+    source = ListingSource.create!(name: "Remax", adapter_key: "remax")
+    listing = Listing.create!(listing_source: source, external_id: "30206", title: "Existing",
+      canonical_url: "https://www.remax.com.uy/listings/alquiler-pocitos-1-dormitorio-balcon-garage", parking_spaces: 1)
+    stub_net_http_start(response_body: remax_response_body) do
+      attributes = Sources::RemaxAdapter.new.fetch_listings.first
+      assert_not attributes.key?(:parking_spaces)
+      Scraping::ListingIntake.new.call(listing_source: source, attributes: attributes)
+    end
+    assert_equal 1, listing.reload.parking_spaces
+  end
+
   private
 
   def remax_response_body(geo_label: "Pocitos, Pocitos, Montevideo", id: 30206, operation_value: "rent")
@@ -172,9 +237,9 @@ class Sources::RemaxAdapterTest < ActiveSupport::TestCase
     end
   end
 
-  def stub_net_http_start(response_body:, request_assertion: nil)
+  def stub_net_http_start(response_body:, request_assertion: nil, response_code: "200")
     original_start = Net::HTTP.method(:start)
-    response = Struct.new(:body).new(response_body)
+    response = Struct.new(:body, :code).new(response_body, response_code)
     http = Object.new
     http.define_singleton_method(:request) do |request|
       yield_args = Thread.current[:net_http_start_args]

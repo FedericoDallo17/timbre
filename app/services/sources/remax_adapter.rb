@@ -8,6 +8,7 @@ module Sources
 
     ENDPOINT_URI = URI("https://api-ar.redremax.com/remaxweb-uy/api/listings/findAllWithEntrepreneurships?page=0&pageSize=50&sort=-createdAt&in=operationId:2&in=typeId:1,2,3,4,5,6,7,8&pricein=3:0:65000&gte=dimensionCovered:30&landingPath=")
     FRONTEND_BASE_URL = "https://www.remax.com.uy"
+    DETAIL_BASE_URL = "https://api-ar.redremax.com/remaxweb-uy/api/listings/findBySlug/"
     OPEN_TIMEOUT_SECONDS = 5
     READ_TIMEOUT_SECONDS = 15
     RECENT_PAGE_LIMIT = 3
@@ -18,8 +19,9 @@ module Sources
       "user-agent" => "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/136.0.0.0 Safari/537.36"
     }.freeze
 
-    def initialize(on_request: nil)
+    def initialize(on_request: nil, detail_throttle_seconds: 0.5)
       @on_request = on_request
+      @detail_throttle_seconds = detail_throttle_seconds
     end
 
     def fetch_listings(known_external_ids: Set.new, reconciliation: false, operation_type: "alquiler")
@@ -45,6 +47,28 @@ module Sources
       []
     end
 
+    def parking_spaces_for_url(canonical_url)
+      return unless canonical_url.is_a?(String)
+      url = URI.parse(canonical_url)
+      return unless url.scheme == "https" && url.host == "www.remax.com.uy"
+      slug = url.path.match(%r{\A/listings/([a-z0-9-]+)/?\z})&.captures&.first
+      return unless slug
+
+      sleep(@detail_throttle_seconds) if @detail_throttle_seconds.positive?
+      response = request(URI("#{DETAIL_BASE_URL}#{slug}"))
+      return unless response.code.to_i == 200
+
+      payload = JSON.parse(response.body)
+      return unless payload.is_a?(Hash)
+      detail = payload["data"]
+      return unless detail.is_a?(Hash) && detail["slug"] == slug
+
+      parking_count(detail["parkingSpaces"])
+    rescue JSON::ParserError, URI::InvalidURIError, IOError, SystemCallError, Timeout::Error, SocketError, OpenSSL::SSL::SSLError => error
+      Rails.logger.warn("[RemaxAdapter] parking detail failed: #{error.class}")
+      nil
+    end
+
     private
 
     def entries(page:, operation_type:)
@@ -56,7 +80,10 @@ module Sources
     end
 
     def http_response(page:, operation_type:)
-      uri = request_uri(page:, operation_type:)
+      request(request_uri(page:, operation_type:))
+    end
+
+    def request(uri)
       Net::HTTP.start(
         uri.host,
         uri.port,
@@ -91,7 +118,7 @@ module Sources
       neighborhood = location_parts.first
       city = location_parts.last
 
-      {
+      attributes = {
         external_id: entry.fetch("id").to_s,
         title: entry["title"],
         canonical_url: canonical_url(entry),
@@ -105,11 +132,15 @@ module Sources
         square_meters: integer_or_nil(entry["dimensionCovered"]),
         expenses_cents: normalize_price(entry["expensesPrice"]),
         expenses_currency: entry.dig("expensesCurrency", "value"),
-        parking_spaces: nil,
         property_type: entry.dig("type", "value"),
         latitude: latitude,
         longitude: longitude
       }
+      # The index normally omits parkingSpaces. Absence must not erase detail
+      # data already stored by the background enrichment.
+      count = parking_count(entry["parkingSpaces"])
+      attributes[:parking_spaces] = count unless count.nil?
+      attributes
     end
 
     def canonical_url(entry)
@@ -139,6 +170,13 @@ module Sources
 
     def integer_or_nil(value)
       return if value.blank?
+
+      value.to_i
+    end
+
+    def parking_count(value)
+      return unless value.is_a?(Integer) || value.is_a?(String)
+      return unless value.to_s.match?(/\A\d+\z/)
 
       value.to_i
     end
