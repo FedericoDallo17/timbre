@@ -2,6 +2,7 @@
 import "@hotwired/turbo-rails"
 import { playTimbreChime } from "timbre_brand"
 import "onboarding"
+import "listing_sorts"
 
 // Native disclosures remain usable without JavaScript. Start compact on phones,
 // and restore desktop controls when crossing the responsive breakpoint.

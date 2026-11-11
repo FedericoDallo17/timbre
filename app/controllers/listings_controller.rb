@@ -1,9 +1,9 @@
 class ListingsController < ApplicationController
-  SORT_OPTIONS = %w[newest price_low price_high total_monthly price_per_m2_low price_per_m2_high fit].freeze
+  SORT_OPTIONS = %w[newest price_low price_high total_monthly price_per_m2_low price_per_m2_high area_low area_high fit].freeze
   CURRENCIES = %w[UYU USD].freeze
   COST_BASES = %w[rent total].freeze
   PER_PAGE = 24
-  FILTER_PARAMS = %i[sort source_id neighborhood currency cost_basis include_expenses
+  FILTER_PARAMS = %i[sort then_sort finally_sort source_id neighborhood currency cost_basis include_expenses
     min_price max_price min_bedrooms expenses_known min_square_meters max_square_meters
     include_unknown_area max_expenses expenses_currency include_unknown_expenses property_type parking_required].freeze
 
@@ -30,18 +30,16 @@ class ListingsController < ApplicationController
     @total_listings = filtered_scope.count
     prepare_pagination
 
-    if @sort == "fit"
+    if @sorts.include?("fit")
       candidates = filtered_scope.includes(:listing_source).to_a
       build_listing_metadata(candidates, match_index:, searches_by_id:)
-      @listings = sort_by_fit(candidates).slice((@page - 1) * PER_PAGE, PER_PAGE) || []
-    else
-      @listings = sort_scope(filtered_scope)
-        .includes(:listing_source)
-        .offset((@page - 1) * PER_PAGE)
-        .limit(PER_PAGE)
-        .to_a
-      build_listing_metadata(@listings, match_index:, searches_by_id:)
     end
+    @listings = sort_scope(filtered_scope)
+      .includes(:listing_source)
+      .offset((@page - 1) * PER_PAGE)
+      .limit(PER_PAGE)
+      .to_a
+    build_listing_metadata(@listings, match_index:, searches_by_id:) unless @sorts.include?("fit")
 
     identities = @listings.to_h { |listing| [listing.id, ListingTrack.identity_for(listing)] }
     tracks_by_identity = current_user.listing_tracks.where(
@@ -77,7 +75,10 @@ class ListingsController < ApplicationController
     @selected_property_type = params[:property_type].presence_in(@filter_property_types)
     @parking_filter_available = base_scope.reorder(nil).where.not(parking_spaces: nil).exists?
     @parking_required = @parking_filter_available && params[:parking_required] == "1"
-    @sort = SORT_OPTIONS.include?(params[:sort]) ? params[:sort] : "newest"
+    @sorts = %i[sort then_sort finally_sort].filter_map do |key|
+      params[key].presence_in(SORT_OPTIONS)
+    end.uniq { |sort| sort.sub(/_(low|high)\z/, "") }
+    @sorts = ["newest"] if @sorts.empty?
   end
 
   def apply_filters(scope)
@@ -130,31 +131,38 @@ class ListingsController < ApplicationController
   end
 
   def sort_scope(scope)
-    order = case @sort
+    orders = @sorts.map { |sort| sort_order(sort) }
+    scope.reorder(Arel.sql((orders + ["created_at DESC", "id DESC"]).join(", ")))
+  end
+
+  def sort_order(sort)
+    case sort
+    when "newest"
+      "created_at DESC"
     when "price_low"
-      "currency ASC NULLS LAST, price_cents ASC NULLS LAST, created_at DESC, id DESC"
+      "currency ASC NULLS LAST, price_cents ASC NULLS LAST"
     when "price_high"
-      "currency ASC NULLS LAST, price_cents DESC NULLS LAST, created_at DESC, id DESC"
+      "currency ASC NULLS LAST, price_cents DESC NULLS LAST"
     when "total_monthly"
       <<~SQL.squish
         currency ASC NULLS LAST,
         CASE WHEN price_cents IS NOT NULL AND expenses_cents IS NOT NULL
           AND COALESCE(NULLIF(expenses_currency, ''), currency) = currency
-          THEN price_cents + expenses_cents END ASC NULLS LAST,
-        created_at DESC, id DESC
+          THEN price_cents + expenses_cents END ASC NULLS LAST
       SQL
     when "price_per_m2_low"
-      "currency ASC NULLS LAST, (price_cents::numeric / NULLIF(square_meters, 0)) ASC NULLS LAST, created_at DESC, id DESC"
+      "currency ASC NULLS LAST, (price_cents::numeric / NULLIF(square_meters, 0)) ASC NULLS LAST"
     when "price_per_m2_high"
-      "currency ASC NULLS LAST, (price_cents::numeric / NULLIF(square_meters, 0)) DESC NULLS LAST, created_at DESC, id DESC"
-    else
-      "created_at DESC, id DESC"
+      "currency ASC NULLS LAST, (price_cents::numeric / NULLIF(square_meters, 0)) DESC NULLS LAST"
+    when "area_low"
+      "NULLIF(square_meters, 0) ASC NULLS LAST"
+    when "area_high"
+      "NULLIF(square_meters, 0) DESC NULLS LAST"
+    when "fit"
+      # IDs and scores are internal integers, never interpolated request values.
+      scores = @listing_scores.map { |listing, result| "WHEN #{Integer(listing.id)} THEN #{Integer(result.score || -1)}" }
+      scores.any? ? "CASE id #{scores.join(" ")} ELSE -1 END DESC" : "created_at DESC"
     end
-    scope.order(Arel.sql(order))
-  end
-
-  def sort_by_fit(listings)
-    listings.sort_by { |listing| [-(@listing_scores.fetch(listing).score || -1), -listing.created_at.to_f, -listing.id] }
   end
 
   def prepare_pagination

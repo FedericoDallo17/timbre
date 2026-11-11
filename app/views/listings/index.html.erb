@@ -57,18 +57,18 @@
         <summary><span><%= t("design.filters") %></span><span class="feed-filter-disclosure__hint"><%= t("design.refine") %></span><span class="feed-filter-disclosure__chevron" aria-hidden="true"></span></summary>
       <%= form_with url: listings_path, method: :get, class: "feed-controls" do |form| %>
         <%= hidden_field_tag :search_id, @active_search.id if @active_search %>
-        <div class="feed-controls__field">
-          <%= form.label :sort, t("feed.sort") %>
-          <%= form.select :sort, [
-            [t("feed.sort_options.newest"), "newest"],
-            [t("feed.sort_options.price_low"), "price_low"],
-            [t("feed.sort_options.price_high"), "price_high"],
-            [t("feed.sort_options.total_monthly"), "total_monthly"],
-            [t("feed.sort_options.price_per_m2_low"), "price_per_m2_low"],
-            [t("feed.sort_options.price_per_m2_high"), "price_per_m2_high"],
-            [t("feed.sort_options.fit"), "fit"]
-          ], selected: @sort %>
-        </div>
+        <fieldset class="feed-sort-controls" aria-describedby="sort_help" data-sort-controls>
+          <legend><%= t("feed.sort") %></legend>
+          <p id="sort_help"><%= t("feed.sort_help") %></p>
+          <div class="feed-sort-controls__fields">
+            <% %i[sort then_sort finally_sort].each_with_index do |key, index| %>
+              <div class="feed-controls__field">
+                <%= form.label key, t("feed.sort_priority.#{key}") %>
+                <%= form.select key, ListingsController::SORT_OPTIONS.map { |value| [t("feed.sort_options.#{value}"), value] }, { include_blank: (t("feed.no_sort") if index.positive?), selected: @sorts[index] || "", disabled: disabled_sort_options(@sorts, index) } %>
+              </div>
+            <% end %>
+          </div>
+        </fieldset>
         <div class="feed-controls__field">
           <%= form.label :source_id, t("feed.source") %>
           <%= form.select :source_id, @filter_sources.map { |source| [source.display_name, source.id] }, { include_blank: t("feed.all_sources"), selected: @selected_source_id } %>
@@ -108,7 +108,7 @@
             <span><%= t("feed.include_expenses") %></span>
           </label>
         </fieldset>
-        <details class="feed-advanced-filters" <%= "open" if @feed_params.except(:sort, :source_id, :neighborhood, :min_bedrooms, :currency, :min_price, :max_price, :include_expenses, :cost_basis).values.any?(&:present?) %>>
+        <details class="feed-advanced-filters" <%= "open" if @feed_params.except(:sort, :then_sort, :finally_sort, :source_id, :neighborhood, :min_bedrooms, :currency, :min_price, :max_price, :include_expenses, :cost_basis).values.any?(&:present?) %>>
           <summary><%= t("design.more_filters") %><span aria-hidden="true">+</span></summary>
           <div class="feed-advanced-filters__grid">
         <fieldset class="feed-range-filter">

@@ -418,7 +418,108 @@ class ListingsControllerTest < ActionDispatch::IntegrationTest
     assert_includes response.body, "Pocitos"
   end
 
+  test "mixed sorts apply every priority before the default date tie breaker" do
+    setup_sort_feed
+    create_sort_listing("Cheap", price_cents: 1_000_000, square_meters: 40)
+    create_sort_listing("Small", price_cents: 2_000_000, square_meters: 40)
+    create_sort_listing("Large older", price_cents: 2_000_000, square_meters: 80, created_at: 2.days.ago)
+    create_sort_listing("Large newer", price_cents: 2_000_000, square_meters: 80, created_at: 1.day.ago)
+
+    get listings_path, params: { sort: "price_low", then_sort: "area_high", finally_sort: "newest" }
+
+    assert_response :success
+    assert_equal ["Cheap", "Large newer", "Large older", "Small"], listing_titles
+    assert_select "select[name='sort'] option[value='price_low'][selected]"
+    assert_select "select[name='then_sort'] option[value='area_high'][selected]"
+    assert_select "select[name='finally_sort'] option[value='newest'][selected]"
+    assert_select "select[name='then_sort'] option[value='price_low'][disabled]"
+    assert_select "select[name='then_sort'] option[value='price_high'][disabled]"
+    assert_select "select[name='sort'] option[value='area_low'][disabled]"
+    assert_select "select[name='sort'] option[value='area_high'][disabled]"
+    assert_select "select[name='finally_sort'] option[value='price_low'][disabled]"
+    assert_select "select[name='finally_sort'] option[value='area_high'][disabled]"
+    assert_select "select[name='finally_sort'] option[value='fit']:not([disabled])"
+  end
+
+  test "surface sorts in both directions put missing and zero area last" do
+    setup_sort_feed
+    create_sort_listing("Small", square_meters: 40)
+    create_sort_listing("Large", square_meters: 80)
+    create_sort_listing("Unknown", square_meters: nil, created_at: 2.days.ago)
+    create_sort_listing("Zero", square_meters: 0, created_at: 1.day.ago)
+
+    get listings_path, params: { sort: "area_low" }
+    assert_equal ["Small", "Large", "Zero", "Unknown"], listing_titles
+
+    get listings_path, params: { sort: "area_high" }
+    assert_equal ["Large", "Small", "Zero", "Unknown"], listing_titles
+  end
+
+  test "fit can break ties after surface without overriding the primary sort" do
+    setup_sort_feed(max_price_cents: 4_000_000)
+    create_sort_listing("Large expensive", square_meters: 80, price_cents: 3_900_000)
+    create_sort_listing("Large affordable", square_meters: 80, price_cents: 2_000_000)
+    create_sort_listing("Small affordable", square_meters: 40, price_cents: 1_000_000)
+
+    get listings_path, params: { sort: "area_high", then_sort: "fit" }
+    assert_equal ["Large affordable", "Large expensive", "Small affordable"], listing_titles
+
+    get listings_path, params: { sort: "fit", then_sort: "area_high" }
+    assert_equal ["Large affordable", "Small affordable", "Large expensive"], listing_titles
+  end
+
+  test "mixed sorts paginate globally and preserve criteria in navigation" do
+    setup_sort_feed
+    26.times do |index|
+      create_sort_listing("Area #{index}", square_meters: index + 1, created_at: index.minutes.ago)
+    end
+    criteria = { sort: "price_low", then_sort: "area_high", finally_sort: "newest" }
+
+    get listings_path, params: criteria
+    assert_equal (2..25).to_a.reverse.map { |index| "Area #{index}" }, listing_titles
+    assert_select ".feed-pagination a[href='#{listings_path(criteria.merge(page: 2))}']"
+    assert_select "a.search-link[href='#{listings_path(criteria.merge(search_id: @sort_search.id))}']"
+
+    get listings_path, params: criteria.merge(page: 2)
+    assert_equal ["Area 1", "Area 0"], listing_titles
+  end
+
+  test "invalid and repeated sort dimensions are ignored" do
+    setup_sort_feed
+    create_sort_listing("Small", square_meters: 40)
+    create_sort_listing("Large", square_meters: 80)
+
+    get listings_path, params: { sort: "area_high", then_sort: "area_low", finally_sort: "invalid SQL" }
+
+    assert_response :success
+    assert_equal ["Large", "Small"], listing_titles
+    assert_select "select[name='then_sort'] option[value='']", text: "None"
+    assert_select "select[name='then_sort'] option[selected]", count: 0
+
+    get listings_path, params: { sort: "invalid SQL" }
+    assert_response :success
+    assert_select "select[name='sort'] option[value='newest'][selected]"
+  end
+
   private
+
+  def setup_sort_feed(**preferences)
+    user = create_user!(email: "mixed-sort@example.com")
+    @sort_search = user.search_preferences.create!({ name: "Pocitos", location_query: "Pocitos" }.merge(preferences))
+    @sort_source = ListingSource.create!(name: "Sort Source", adapter_key: "mixed_sort_source")
+    sign_in user
+  end
+
+  def create_sort_listing(title, **attributes)
+    Listing.create!({ listing_source: @sort_source, title: title,
+      canonical_url: "https://example.test/#{SecureRandom.uuid}", location_text: "Pocitos",
+      price_cents: 2_000_000, currency: "UYU", in_scope: true }.merge(attributes))
+  end
+
+  def listing_titles
+    css_select(".listing-card h2").map { |node| node.text.strip }
+  end
+
 
   def create_user!(email:)
     User.create!(
