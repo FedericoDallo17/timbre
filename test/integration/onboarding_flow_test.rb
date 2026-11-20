@@ -15,8 +15,15 @@ class OnboardingFlowTest < ActionDispatch::IntegrationTest
   end
 
   test "first search has three accessible steps and useful defaults" do
+    create_zone
     get new_search_preference_path
     assert_select "form[data-onboarding]"
+    assert_select "fieldset.onboarding-zone-group" do
+      assert_select "legend#onboarding-zone-legend", text: "Barrios"
+      assert_select "div.onboarding-zones[tabindex='0'][aria-labelledby='onboarding-zone-legend']" do
+        assert_select "label[data-onboarding-zone]"
+      end
+    end
     assert_select "[data-onboarding-panel]", count: 3
     assert_select "[data-onboarding-panel][hidden]", count: 0
     assert_select "input[name='search_preference[location_query]'][value='Montevideo']"

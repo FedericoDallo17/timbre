@@ -36,15 +36,17 @@ end %>
           <label for="onboarding-zone-query"><%= t("onboarding.find_neighborhood") %></label>
           <input id="onboarding-zone-query" type="search" autocomplete="off" placeholder="<%= t("onboarding.neighborhood_example") %>" data-onboarding-zone-query>
         </div>
-        <fieldset class="onboarding-zones">
-          <legend class="onboarding-sr-only"><%= t("searches.neighborhoods") %></legend>
-          <% zones.each do |zone| %>
-            <label data-onboarding-zone>
-              <%= check_box_tag "search_preference[zone_ids][]", zone.id, search_preference.zone_ids.include?(zone.id), id: "onboarding-zone-#{zone.id}" %>
-              <span><%= zone.name %></span>
-            </label>
-          <% end %>
-          <%= hidden_field_tag "search_preference[zone_ids][]", "" %>
+        <fieldset class="onboarding-zone-group">
+          <legend id="onboarding-zone-legend" class="onboarding-sr-only"><%= t("searches.neighborhoods") %></legend>
+          <div class="onboarding-zones" tabindex="0" aria-labelledby="onboarding-zone-legend">
+            <% zones.each do |zone| %>
+              <label data-onboarding-zone>
+                <%= check_box_tag "search_preference[zone_ids][]", zone.id, search_preference.zone_ids.include?(zone.id), id: "onboarding-zone-#{zone.id}" %>
+                <span><%= zone.name %></span>
+              </label>
+            <% end %>
+            <%= hidden_field_tag "search_preference[zone_ids][]", "" %>
+          </div>
         </fieldset>
         <p class="onboarding-note" data-onboarding-no-zones hidden><%= t("onboarding.no_neighborhoods") %></p>
         <p class="onboarding-note"><%= t("onboarding.zone_fallback") %></p>

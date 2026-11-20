@@ -1,6 +1,6 @@
 # Status
 
-Last updated: 2026-11-11. New here? Read `.ai/WORKFLOW.md` first - it's the dev loop.
+Last updated: 2026-11-20. New here? Read `.ai/WORKFLOW.md` first - it's the dev loop.
 Full audit context: docs/superpowers/reports/2026-07-06-state-of-the-project.md
 
 ## Current Phase
@@ -13,6 +13,7 @@ InfoCasas sale classification corrected and verified against all four active pro
 Hourly acquisition is freshness-first: InfoCasas uses its publication window, Remax and Imperium stop bounded recent pagination at known source-local IDs, and Housi remains one page. A bounded Sunday reconciliation refreshes older inventory without notifying users. MercadoLibre remains paused until API keys or an allowed index payload sample are available.
 
 ## Done
+- Onboarding neighborhood scroll fixed locally: a named, keyboard-focusable inner div owns scrolling instead of the fieldset. Reproduced Chrome wheel escape over gaps/padding with the full Rails-rendered form; fixed version keeps document scroll at zero. Chrome/Firefox wheel, boundary, keyboard, filter, selection and 390px layout checks pass. Full suite on updated main: 353 tests / 2256 assertions. Not deployed; see `docs/superpowers/handoffs/2026-11-20-onboarding-scroll.md` (11-20).
 - Remax parking correction deployed as 0ca8316: verified detail API, serialized bounded enrichment, hourly schedule, preserved reingestion/snapshots and inventory age. Reported external_id 28050 now has parking_spaces 1. Full suite: 353 tests / 2248 assertions; Zeitwerk passed (11-11).
 - Impeccable init completed against current Timbre main (bd31c93), preserving the approved brand, rental/sale scope and user-confirmed comp-first default. Three prioritized feed sort criteria, surface-area ordering and disabled duplicate/contradictory choices implemented locally. Full suite: 345 tests / 2198 assertions, no failures. Not deployed (11-11).
 - InfoCasas operation IDs now map 1 to sale and 2 to rental (numeric/string); only exact legacy URL operations may override the requested operation when the provider ID is absent. Explicit unknown IDs remain out of scope. Full suite: 340 tests / 2158 assertions. Exactly one live sale index HTTP request per active provider returned 200; InfoCasas 50, Remax 50, Housi 20, Imperium 8 normalized listings, all correctly classified. See `docs/superpowers/handoffs/2026-10-27-infocasas-sale-classification.md`. Historical invalid inventory recovery remains pending; no bulk relabeling performed (10-27).
