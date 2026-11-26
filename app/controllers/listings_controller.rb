@@ -24,7 +24,7 @@ class ListingsController < ApplicationController
       match_index.search_ids_by_listing_id.keys
     end
 
-    base_scope = Listing.where(id: listing_ids)
+    base_scope = Listing.available.where(id: listing_ids)
     prepare_filter_options(base_scope)
     filtered_scope = apply_filters(base_scope)
     @total_listings = filtered_scope.count
@@ -73,8 +73,7 @@ class ListingsController < ApplicationController
     @include_unknown_expenses = params[:include_unknown_expenses].nil? || params[:include_unknown_expenses] == "1"
     @filter_property_types = base_scope.reorder(nil).where.not(property_type: [nil, ""]).distinct.order(:property_type).pluck(:property_type)
     @selected_property_type = params[:property_type].presence_in(@filter_property_types)
-    @parking_filter_available = base_scope.reorder(nil).where.not(parking_spaces: nil).exists?
-    @parking_required = @parking_filter_available && params[:parking_required] == "1"
+    @parking_required = params[:parking_required] == "1"
     @sorts = %i[sort then_sort finally_sort].filter_map do |key|
       params[key].presence_in(SORT_OPTIONS)
     end.uniq { |sort| sort.sub(/_(low|high)\z/, "") }

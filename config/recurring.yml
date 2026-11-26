@@ -53,6 +53,10 @@ production:
     class: RunScrapersJob
     queue: default
     schedule: every hour
+  refresh_listing_availability:
+    class: RefreshListingAvailabilityJob
+    queue: default
+    schedule: "25 * * * *"
   reconcile_scrapers:
     class: RunScrapersJob
     queue: default

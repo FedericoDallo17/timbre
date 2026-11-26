@@ -4,6 +4,8 @@ module Zones
   class ImportMontevideoNeighborhoods
     SOURCE_KEY = "ide_uy_barrios_montevideo"
     SOURCE_URL = "https://mapas.ide.uy/geoserver-vectorial/ws_capa_base/wfs?service=WFS&version=2.0.0&request=GetFeature&typeNames=ws_capa_base%3Abarrios_montevideo&outputFormat=application%2Fjson&srsName=EPSG%3A4326"
+    PARQUE_BATLLE_NAME = "Parque Batlle - Villa Dolores"
+    PARQUE_BATLLE_SLUG = "pque-batlle-villa-dolores"
 
     Result = Data.define(:created_count, :updated_count)
 
@@ -18,14 +20,15 @@ module Zones
         collection.fetch("features").each do |feature|
           properties = feature.fetch("properties")
           name = canonical_name(properties.fetch("barrio"))
+          slug = name == PARQUE_BATLLE_NAME ? PARQUE_BATLLE_SLUG : name.parameterize
           feature_id = (properties["gid"] || properties["ogc_fid"]).to_s
           zone = Zone.find_or_initialize_by(source_key: SOURCE_KEY, source_feature_id: feature_id)
-          zone = Zone.find_or_initialize_by(slug: name.parameterize) if zone.new_record? && Zone.exists?(slug: name.parameterize)
+          zone = Zone.find_by(slug:) || zone if zone.new_record?
           was_new = zone.new_record?
 
           zone.assign_attributes(
             name:,
-            slug: name.parameterize,
+            slug:,
             aliases: (zone.aliases + aliases_for(name)).uniq,
             geom: geometry(feature.fetch("geometry")),
             active: true,
@@ -44,12 +47,16 @@ module Zones
     private
 
     def canonical_name(value)
-      value.to_s.mb_chars.downcase.titleize.to_s
+      name = value.to_s.squish.downcase.titleize
+      return PARQUE_BATLLE_NAME if ["Pque Batlle Villa Dolores", "Parque Batlle Villa Dolores"].include?(name)
+
+      name
     end
 
     def aliases_for(name)
       aliases = [name.downcase, ActiveSupport::Inflector.transliterate(name).downcase]
       aliases << "villa del cerro" if name == "Cerro"
+      aliases.concat(["pque batlle villa dolores", "parque batlle villa dolores", "parque batlle", "villa dolores"]) if name == PARQUE_BATLLE_NAME
       aliases.uniq
     end
 

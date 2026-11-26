@@ -2866,7 +2866,7 @@ button:active, input[type="submit"]:active { transform: translateY(1px); }
 .feed-advanced-filters__grid .feed-range-filter { padding: 0; border: 0; grid-column: auto; gap: .5rem; }
 .feed-advanced-filters__grid legend { margin-bottom: .5rem; padding: 0; }
 .feed-advanced-filters__grid .feed-range-filter label { min-height: 2.75rem; font-size: .8125rem; font-weight: 400; color: var(--filter-muted); }
-.feed-advanced-filters__grid .feed-controls__checkbox { font-size: .875rem; font-weight: 400; min-height: 2.875rem; color: var(--filter-ink); }
+.feed-controls > .feed-controls__checkbox { font-size: .875rem; font-weight: 400; min-height: 2.875rem; color: var(--filter-ink); }
 .feed-controls__actions { grid-column: 1 / -1; justify-content: flex-end; gap: 1rem; padding-top: .25rem; }
 .feed-controls .feed-controls__submit { min-height: 2.875rem; padding: .65rem 1.35rem; border-radius: 8px; font-size: .875rem; font-weight: 600; }
 .feed-controls__clear { display: inline-flex; align-items: center; min-height: 2.875rem; padding: .5rem .25rem; font-size: .875rem; text-underline-offset: .2rem; }

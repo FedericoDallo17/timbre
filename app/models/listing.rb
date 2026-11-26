@@ -11,6 +11,7 @@ class Listing < ApplicationRecord
   validates :external_id, uniqueness: { scope: :listing_source_id }, allow_nil: true
 
   scope :recent_first, -> { order(created_at: :desc) }
+  scope :available, -> { where(unavailable_at: nil) }
   scope :in_scope_inventory, -> { where(in_scope: true) }
   scope :spatially_resolvable, -> { where.not(coordinates: nil) }
   scope :fallback_only, -> { where(location_resolution_status: "fallback") }
@@ -41,9 +42,9 @@ class Listing < ApplicationRecord
   end
 
   def self.for_search_feed(search_preference)
-    return recent_first unless search_preference
+    return available.recent_first unless search_preference
 
-    listings = in_scope_inventory
+    listings = available.in_scope_inventory
     listings = listings.where(operation_type: search_preference.operation_type)
     listings = if search_has_zones?(search_preference)
       listings.where(id: matching_zone_ids(search_preference.zones.to_a))

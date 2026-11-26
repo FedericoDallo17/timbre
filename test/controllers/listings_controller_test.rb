@@ -349,7 +349,7 @@ class ListingsControllerTest < ActionDispatch::IntegrationTest
     assert_select ".listing-card__facts", text: /UYU 1\.000/
   end
 
-  test "feed exposes property type and parking controls only when data is available" do
+  test "feed filters by property type and confirmed parking" do
     user = create_user!(email: "metadata-filter@example.com")
     source = ListingSource.create!(name: "Metadata Source", adapter_key: "metadata_filter_source")
     user.search_preferences.create!(name: "Pocitos", location_query: "Pocitos")
@@ -363,6 +363,20 @@ class ListingsControllerTest < ActionDispatch::IntegrationTest
     assert_select "input[name='parking_required'][checked='checked']"
     assert_includes response.body, "Apartment with parking"
     assert_not_includes response.body, "House without parking"
+  end
+
+  test "feed keeps the parking filter visible and applied when parking data is missing" do
+    user = create_user!(email: "parking-unknown@example.com")
+    source = ListingSource.create!(name: "Parking Unknown", adapter_key: "parking_unknown")
+    user.search_preferences.create!(name: "Pocitos", location_query: "Pocitos")
+    Listing.create!(listing_source: source, title: "Unknown parking", canonical_url: "https://example.test/unknown-parking", location_text: "Pocitos", in_scope: true)
+    sign_in user
+
+    get listings_path, params: { parking_required: "1" }
+
+    assert_select ".feed-controls > label input[name='parking_required'][checked='checked']"
+    assert_select ".feed-advanced-filters[open]", count: 0
+    assert_select ".listing-card", count: 0
   end
 
   test "feed paginates SQL results and preserves the total count" do

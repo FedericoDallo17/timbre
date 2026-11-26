@@ -10,7 +10,7 @@
 #
 # It's strongly recommended that you check this file into your version control system.
 
-ActiveRecord::Schema[8.0].define(version: 2026_10_21_120000) do
+ActiveRecord::Schema[8.0].define(version: 2026_11_26_121000) do
   # These are extensions that must be enabled in order to support this database
   enable_extension "pg_catalog.plpgsql"
   enable_extension "postgis"
@@ -69,6 +69,8 @@ ActiveRecord::Schema[8.0].define(version: 2026_10_21_120000) do
     t.integer "parking_spaces"
     t.string "property_type"
     t.string "operation_type", default: "alquiler", null: false
+    t.datetime "availability_checked_at"
+    t.datetime "unavailable_at"
     t.index "COALESCE(NULLIF((expenses_currency)::text, ''::text), (currency)::text), expenses_cents", name: "index_listings_feed_expenses", where: "((in_scope = true) AND (expenses_cents IS NOT NULL))"
     t.index "currency, (((price_cents)::numeric / (NULLIF(square_meters, 0))::numeric))", name: "index_listings_feed_price_per_m2", where: "((in_scope = true) AND (price_cents IS NOT NULL) AND (square_meters > 0))"
     t.index ["coordinates"], name: "index_listings_on_coordinates", using: :gist

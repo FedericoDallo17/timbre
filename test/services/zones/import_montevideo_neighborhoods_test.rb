@@ -18,6 +18,19 @@ class Zones::ImportMontevideoNeighborhoodsTest < ActiveSupport::TestCase
     assert zone.geom.present?
   end
 
+  test "expands Parque Batlle in place and recognizes provider neighborhood names" do
+    importer = Zones::ImportMontevideoNeighborhoods.new
+    importer.call(json: geojson("PQUE BATLLE VILLA DOLORES"))
+    zone = Zone.find_by!(slug: "pque-batlle-villa-dolores")
+
+    result = importer.call(json: geojson("PARQUE BATLLE VILLA DOLORES"))
+
+    assert_equal 0, result.created_count
+    assert_equal "Parque Batlle - Villa Dolores", zone.reload.name
+    assert_includes zone.aliases, "parque batlle"
+    assert_includes zone.aliases, "pque batlle villa dolores"
+  end
+
   private
 
   def geojson(name)

@@ -169,7 +169,7 @@ en:
     include_unknown_expenses: "Include listings without reported expenses"
     property_type: "Property type"
     all_property_types: "All property types"
-    parking_required: "Parking required"
+    parking_required: "With parking"
     price_per_m2: "Price per m²"
     parking: "Parking"
     type: "Type"

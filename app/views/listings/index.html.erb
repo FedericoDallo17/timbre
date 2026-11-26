@@ -88,6 +88,10 @@
             [t("feed.bedroom_options.four_plus"), 4]
           ], selected: @min_bedrooms %>
         </div>
+        <label class="feed-controls__checkbox">
+          <%= check_box_tag :parking_required, "1", @parking_required %>
+          <span><%= t("feed.parking_required") %></span>
+        </label>
         <fieldset class="feed-price-filter">
           <legend><%= t("feed.price") %></legend>
           <div class="feed-price-filter__currency" aria-label="<%= t("feed.currency") %>">
@@ -108,7 +112,7 @@
             <span><%= t("feed.include_expenses") %></span>
           </label>
         </fieldset>
-        <details class="feed-advanced-filters" <%= "open" if @feed_params.except(:sort, :then_sort, :finally_sort, :source_id, :neighborhood, :min_bedrooms, :currency, :min_price, :max_price, :include_expenses, :cost_basis).values.any?(&:present?) %>>
+        <details class="feed-advanced-filters" <%= "open" if @feed_params.except(:sort, :then_sort, :finally_sort, :source_id, :neighborhood, :min_bedrooms, :currency, :min_price, :max_price, :include_expenses, :cost_basis, :parking_required).values.any?(&:present?) %>>
           <summary><%= t("design.more_filters") %><span aria-hidden="true">+</span></summary>
           <div class="feed-advanced-filters__grid">
         <fieldset class="feed-range-filter">
@@ -141,12 +145,6 @@
             <%= form.label :property_type, t("feed.property_type") %>
             <%= form.select :property_type, @filter_property_types, { include_blank: t("feed.all_property_types"), selected: @selected_property_type } %>
           </div>
-        <% end %>
-        <% if @parking_filter_available %>
-          <label class="feed-controls__checkbox">
-            <%= check_box_tag :parking_required, "1", @parking_required %>
-            <span><%= t("feed.parking_required") %></span>
-          </label>
         <% end %>
           </div>
         </details>

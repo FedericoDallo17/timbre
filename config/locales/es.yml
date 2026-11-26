@@ -217,7 +217,7 @@ es:
     include_unknown_expenses: "Incluir propiedades sin gastos informados"
     property_type: "Tipo de propiedad"
     all_property_types: "Todos los tipos"
-    parking_required: "Garaje obligatorio"
+    parking_required: "Con garaje"
     price_per_m2: "Precio por m²"
     parking: "Garaje"
     type: "Tipo"

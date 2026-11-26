@@ -179,6 +179,25 @@ class Sources::RemaxAdapterTest < ActiveSupport::TestCase
     end
   end
 
+  test "availability uses the exact listing's explicit status or a definitive removal response" do
+    adapter = Sources::RemaxAdapter.new
+    url = "https://www.remax.com.uy/listings/example"
+
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "example", listingStatus: { value: "reserved" } })) do
+      assert_equal :unavailable, adapter.availability_for_url(url)
+    end
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "example", listingStatus: { value: "active" } })) do
+      assert_equal :available, adapter.availability_for_url(url)
+    end
+    stub_net_http_start(response_body: JSON.generate(data: { slug: "other", listingStatus: { value: "reserved" } })) do
+      assert_nil adapter.availability_for_url(url)
+    end
+    stub_net_http_start(response_body: "", response_code: "410") do
+      assert_equal :unavailable, adapter.availability_for_url(url)
+      assert_nil adapter.availability_for_url("https://www.remax.com.uy/listings/123")
+    end
+  end
+
   test "index omits unknown parking so reingestion preserves a detail-enriched count" do
     source = ListingSource.create!(name: "Remax", adapter_key: "remax")
     listing = Listing.create!(listing_source: source, external_id: "30206", title: "Existing",

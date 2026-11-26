@@ -48,20 +48,15 @@ module Sources
     end
 
     def parking_spaces_for_url(canonical_url)
-      return unless canonical_url.is_a?(String)
-      url = URI.parse(canonical_url)
-      return unless url.scheme == "https" && url.host == "www.remax.com.uy"
-      slug = url.path.match(%r{\A/listings/([a-z0-9-]+)/?\z})&.captures&.first
+      slug = listing_slug(canonical_url)
       return unless slug
 
       sleep(@detail_throttle_seconds) if @detail_throttle_seconds.positive?
       response = request(URI("#{DETAIL_BASE_URL}#{slug}"))
       return unless response.code.to_i == 200
 
-      payload = JSON.parse(response.body)
-      return unless payload.is_a?(Hash)
-      detail = payload["data"]
-      return unless detail.is_a?(Hash) && detail["slug"] == slug
+      detail = matching_detail(response, slug)
+      return unless detail
 
       parking_count(detail["parkingSpaces"])
     rescue JSON::ParserError, URI::InvalidURIError, IOError, SystemCallError, Timeout::Error, SocketError, OpenSSL::SSL::SSLError => error
@@ -69,7 +64,42 @@ module Sources
       nil
     end
 
+    def availability_for_url(canonical_url)
+      slug = listing_slug(canonical_url)
+      return if !slug || slug.match?(/\A\d+\z/)
+
+      response = request(URI("#{DETAIL_BASE_URL}#{slug}"))
+      case response.code.to_i
+      when 404, 410
+        :unavailable
+      when 200
+        status = matching_detail(response, slug)&.fetch("listingStatus", nil)
+        return unless status.is_a?(Hash)
+
+        status = status["value"]
+        return :available if status == "active"
+        return :unavailable if status == "reserved"
+      end
+    end
+
     private
+
+    def listing_slug(canonical_url)
+      return unless canonical_url.is_a?(String)
+
+      url = URI.parse(canonical_url)
+      return unless url.scheme == "https" && url.host == "www.remax.com.uy"
+
+      url.path.match(%r{\A/listings/([a-z0-9-]+)/?\z})&.captures&.first
+    end
+
+    def matching_detail(response, slug)
+      payload = JSON.parse(response.body)
+      return unless payload.is_a?(Hash)
+
+      detail = payload["data"]
+      detail if detail.is_a?(Hash) && detail["slug"] == slug
+    end
 
     def entries(page:, operation_type:)
       payload(page:, operation_type:).dig("data", "data") || []
